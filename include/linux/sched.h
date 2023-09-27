@@ -1,4 +1,41 @@
+/*
+ *                        _oo0oo_
+ *                       o8888888o
+ *                       88" . "88
+ *                       (| -_- |)
+ *                       0\  =  /0
+ *                     ___/`---'\___
+ *                   .' \\|     |// '.
+ *                  / \\|||  :  |||// \
+ *                 / _||||| -:- |||||- \
+ *                |   | \\\  - /// |   |
+ *                | \_|  ''\---/''  |_/ |
+ *                \  .-\__  '-'  ___/-. /
+ *              ___'. .'  /--.--\  `. .'___
+ *           ."" '<  `.___\_<|>_/___.' >' "".
+ *          | | :  `- \`.;`\ _ /`;.`/ - ` : | |
+ *          \  \ `_.   \_ __\ /__ _/   .-` /  /
+ *      =====`-.____`.___ \_____/___.-`___.-'=====
+ *                        `=---='
+ *
+ *
+ *      ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+ *
+ *            佛祖保佑     永不宕机     永无BUG
+ *
+ *        佛曰:
+ *                写字楼里写字间，写字间里程序员；
+ *                程序人员写程序，又拿程序换酒钱。
+ *                酒醒只在网上坐，酒醉还来网下眠；
+ *                酒醉酒醒日复日，网上网下年复年。
+ *                但愿老死电脑间，不愿鞠躬老板前；
+ *                奔驰宝马贵者趣，公交自行程序员。
+ *                别人笑我忒疯癫，我笑自己命太贱；
+ *                不见满街漂亮妹，哪个归得程序员？
+ */
+
 /* SPDX-License-Identifier: GPL-2.0 */
+
 #ifndef _LINUX_SCHED_H
 #define _LINUX_SCHED_H
 
@@ -82,16 +119,17 @@ struct user_event_mm;
  * mistake.
  */
 
-/* Used in tsk->__state: */
-#define TASK_RUNNING 0x00000000       // 程序就绪状态
-#define TASK_INTERRUPTIBLE 0x00000001 // 程序
-#define TASK_UNINTERRUPTIBLE 0x00000002
-#define __TASK_STOPPED 0x00000004
-#define __TASK_TRACED 0x00000008
-/* Used in tsk->exit_state: */
-#define EXIT_DEAD 0x00000010
-#define EXIT_ZOMBIE 0x00000020
-#define EXIT_TRACE (EXIT_ZOMBIE | EXIT_DEAD)
+/* Used in tsk->__state: 进程状态*/
+#define TASK_RUNNING 0x00000000         // 进程正在运行
+#define TASK_INTERRUPTIBLE 0x00000001   // 可中断睡眠
+#define TASK_UNINTERRUPTIBLE 0x00000002 // 不可中断睡眠
+#define __TASK_STOPPED 0x00000004       // 进程已经停止
+#define __TASK_TRACED 0x00000008        // 进程正在被监视
+
+/* Used in tsk->exit_state: 进程退出状态 */
+#define EXIT_DEAD 0x00000010                 // 进程已经退出 但是尚未清理
+#define EXIT_ZOMBIE 0x00000020               // 僵尸线程，父进程未获取到退出状态
+#define EXIT_TRACE (EXIT_ZOMBIE | EXIT_DEAD) // 已经退出的将是线程
 /* Used in tsk->__state again: */
 #define TASK_PARKED 0x00000040
 #define TASK_DEAD 0x00000080
@@ -747,21 +785,21 @@ struct kmap_ctrl {
 
 // 进程控制块数据结构
 struct task_struct {
+  /*   决定线程信息是否存在在task_struct中
+    没有定义将线程信息存储在内核堆栈中
+    task_struct占用变小但是查找效率小
+    定义了就将线程信息定义在task_struct中
+    (查找效率高,不用频繁申请释放内存,但是结构体信息增大,内存占用增加) */
 
-  // 决定线程信息是否存在在task_struct中
-  // 没有定义将线程信息存储在内核堆栈中 
-  // task_struct占用变小但是查找效率小
-  // 定义了就将线程信息定义在task_struct中 
-  // (查找效率高,不用频繁申请释放内存,但是结构体信息增大,内存占用增加)
-
+  /* 当前版本定义了 */
 #ifdef CONFIG_THREAD_INFO_IN_TASK
   /*
    * 由于 header soup 的原因（参见 current_thread_info()），这
-   *必须是task_struct 的第一个元素。
+   * 必须是task_struct 的第一个元素。
    */
   struct thread_info thread_info;
 #endif
-  
+
   unsigned int __state; // 状态
 
   // 是否启用实时补丁
@@ -979,6 +1017,7 @@ struct task_struct {
 
   struct restart_block restart_block;
 
+  /* pid 用于描述用户唯一进程id  数据类型-> 整形*/
   pid_t pid;
   pid_t tgid;
 
