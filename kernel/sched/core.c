@@ -5632,50 +5632,51 @@ static inline u64 cpu_resched_latency(struct rq *rq) { return 0; }
 #endif /* CONFIG_SCHED_DEBUG */
 
 /*
- * This function gets called by the timer code, with HZ frequency.
- * We call it with interrupts disabled.
+ * 该函数由定时器代码调用，以HZ频率。
+ * 在调用时中断已被禁用。
  */
 void scheduler_tick(void)
 {
-	int cpu = smp_processor_id();
-	struct rq *rq = cpu_rq(cpu);
-	struct task_struct *curr = rq->curr;
-	struct rq_flags rf;
-	unsigned long thermal_pressure;
-	u64 resched_latency;
+	int cpu = smp_processor_id();  // 获取当前CPU的ID
+	struct rq *rq = cpu_rq(cpu);  // 获取当前CPU的运行队列
+	struct task_struct *curr = rq->curr;  // 获取当前正在运行的任务
+	struct rq_flags rf;  // 用于保护运行队列的标志
+	unsigned long thermal_pressure;  // 热压力指标（thermal pressure）的值
+	u64 resched_latency;  // 重新调度延迟值
 
 	if (housekeeping_cpu(cpu, HK_TYPE_TICK))
-		arch_scale_freq_tick();
+		arch_scale_freq_tick();  // 如果是处理器维护之类的操作，则调整频率
 
-	sched_clock_tick();
+	sched_clock_tick();  // 更新调度器时钟
 
-	rq_lock(rq, &rf);
+	rq_lock(rq, &rf);  // 对运行队列进行锁定
 
-	update_rq_clock(rq);
-	thermal_pressure = arch_scale_thermal_pressure(cpu_of(rq));
-	update_thermal_load_avg(rq_clock_thermal(rq), rq, thermal_pressure);
-	curr->sched_class->task_tick(rq, curr, 0);
+	update_rq_clock(rq);  // 更新运行队列的时钟
+	thermal_pressure = arch_scale_thermal_pressure(cpu_of(rq));  // 根据当前温度计算热压力
+	update_thermal_load_avg(rq_clock_thermal(rq), rq, thermal_pressure);  // 更新热负载平均值
+	curr->sched_class->task_tick(rq, curr, 0);  // 调用当前任务的调度类的task_tick函数进行任务调度
 	if (sched_feat(LATENCY_WARN))
-		resched_latency = cpu_resched_latency(rq);
-	calc_global_load_tick(rq);
-	sched_core_tick(rq);
-	task_tick_mm_cid(rq, curr);
+		resched_latency = cpu_resched_latency(rq);  // 如果启用了延迟警告，则计算重新调度延迟
+	calc_global_load_tick(rq);  // 计算全局负载值
+	sched_core_tick(rq);  // 执行与核心调度相关的操作
+	task_tick_mm_cid(rq, curr);  // 在多处理器环境下处理内存管理相关的操作
 
-	rq_unlock(rq, &rf);
+	rq_unlock(rq, &rf);  // 解锁运行队列
 
 	if (sched_feat(LATENCY_WARN) && resched_latency)
-		resched_latency_warn(cpu, resched_latency);
+		resched_latency_warn(cpu, resched_latency);  // 如果启用了延迟警告且存在重新调度延迟，则发出警告
 
-	perf_event_task_tick();
+	perf_event_task_tick();  // 处理性能事件的任务计数
 
 	if (curr->flags & PF_WQ_WORKER)
-		wq_worker_tick(curr);
+		wq_worker_tick(curr);  // 如果当前任务是工作队列的工作任务，则进行工作队列任务计数
 
 #ifdef CONFIG_SMP
-	rq->idle_balance = idle_cpu(cpu);
-	trigger_load_balance(rq);
+	rq->idle_balance = idle_cpu(cpu);  // 设置是否启用空闲CPU负载平衡
+	trigger_load_balance(rq);  // 触发负载平衡操作
 #endif
 }
+
 
 #ifdef CONFIG_NO_HZ_FULL
 
@@ -5984,7 +5985,7 @@ static void put_prev_task_balance(struct rq *rq, struct task_struct *prev,
 }
 
 /*
- * Pick up the highest-prio task:
+ * 选取优先级最高的任务:
  */
 static inline struct task_struct *
 __pick_next_task(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
@@ -5993,19 +5994,21 @@ __pick_next_task(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 	struct task_struct *p;
 
 	/*
-	 * Optimization: we know that if all tasks are in the fair class we can
-	 * call that function directly, but only if the @prev task wasn't of a
-	 * higher scheduling class, because otherwise those lose the
-	 * opportunity to pull in more work from other CPUs.
+	 * 优化：我们知道，如果所有任务都在公平类别中，我们可以
+	 * 直接调用该函数，但前提是 @prev 任务不是
+	 * 更高的调度等级，因为否则那些会失去
+	 * 有机会从其他 CPU 中获取更多工作。
 	 */
 	if (likely(!sched_class_above(prev->sched_class, &fair_sched_class) &&
 		   rq->nr_running == rq->cfs.h_nr_running)) {
 
+		// 选择下一个公平类 (fair class) 的任务
 		p = pick_next_task_fair(rq, prev, rf);
 		if (unlikely(p == RETRY_TASK))
 			goto restart;
 
 		/* Assume the next prioritized class is idle_sched_class */
+		// 如果没有找到任务，则切换到 idle 类 (idle_sched_class) 并选择任务
 		if (!p) {
 			put_prev_task(rq, prev);
 			p = pick_next_task_idle(rq);
@@ -6015,16 +6018,21 @@ __pick_next_task(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
 	}
 
 restart:
+	// 清理之前的任务选择状态
 	put_prev_task_balance(rq, prev, rf);
 
+	// 遍历每个调度类 (sched_class)
 	for_each_class(class) {
+		// 选择下一个任务
 		p = class->pick_next_task(rq);
 		if (p)
 			return p;
 	}
 
+	// 如果代码执行到此处，表示出现了错误，因为 idle 类 (idle_sched_class) 应该始终有可运行的任务
 	BUG(); /* The idle class should always have a runnable task. */
 }
+
 
 #ifdef CONFIG_SCHED_CORE
 static inline bool is_task_rq_idle(struct task_struct *t)
@@ -6656,6 +6664,7 @@ static void __sched notrace __schedule(unsigned int sched_mode)
 		switch_count = &prev->nvcsw;
 	}
 
+  /* 选择下一个进程 */
 	next = pick_next_task(rq, prev, &rf);
 	clear_tsk_need_resched(prev);
 	clear_preempt_need_resched();
@@ -6691,7 +6700,8 @@ static void __sched notrace __schedule(unsigned int sched_mode)
 
 		trace_sched_switch(sched_mode & SM_MASK_PREEMPT, prev, next, prev_state);
 
-		/* Also unlocks the rq: */
+    /* Also unlocks the rq: */
+    /* 切换进程 */
 		rq = context_switch(rq, prev, next, &rf);
 	} else {
 		rq->clock_update_flags &= ~(RQCF_ACT_SKIP|RQCF_REQ_SKIP);
@@ -6761,18 +6771,19 @@ static void sched_update_worker(struct task_struct *tsk)
 	}
 }
 
-asmlinkage __visible void __sched schedule(void)
-{
-	struct task_struct *tsk = current;
-
-	sched_submit_work(tsk);
-	do {
-		preempt_disable();
-		__schedule(SM_NONE);
-		sched_preempt_enable_no_resched();
-	} while (need_resched());
-	sched_update_worker(tsk);
+/* 调度器关键函数 */
+asmlinkage __visible void __sched schedule(void) {
+  struct task_struct *tsk = current; // 获取当前正在运行的任务的结构体指针 tsk
+  sched_submit_work(tsk); // 提交当前任务给调度器进行处理
+  // 进入循环，直到不再需要进行任务调度
+  do {
+    preempt_disable(); // 禁用内核抢占，确保在调度过程中不会被其他任务抢占
+    __schedule(SM_NONE); // 选择下一个要运行的任务并进行上下文切换
+    sched_preempt_enable_no_resched(); // 启用内核抢占，允许其他任务抢占当前任务的执行，但不触发重新调度
+  } while (need_resched()); // 检查是否需要进行任务调度
+  sched_update_worker(tsk); // 更新当前任务的状态
 }
+
 EXPORT_SYMBOL(schedule);
 
 /*

@@ -2230,12 +2230,13 @@ static void rv_task_fork(struct task_struct *p)
 #endif
 
 /*
- * This creates a new process as a copy of the old one,
- * but does not actually start it yet.
+ * 这将创建一个新进程作为旧进程的副本，
+ * 但实际上还没有启动它。
  *
- * It copies the registers, and all the appropriate
- * parts of the process environment (as per the clone
- * flags). The actual kick-off is left to the caller.
+ * 它复制寄存器，以及所有适当的
+ * 进程环境的一部分（根据克隆
+ * 标志）。实际的开球由呼叫者决定。
+ * 创建进程的核心
  */
 __latent_entropy struct task_struct *copy_process(
 					struct pid *pid,
@@ -2859,7 +2860,7 @@ struct task_struct *create_io_thread(int (*fn)(void *), void *arg, int node)
 
 /*
  *  Ok, this is the main fork-routine.
- *
+ *	创建新的进程
  * It copies the process, and if successful kick-starts
  * it and waits for it to finish using the VM if required.
  *
@@ -2867,21 +2868,19 @@ struct task_struct *create_io_thread(int (*fn)(void *), void *arg, int node)
  */
 pid_t kernel_clone(struct kernel_clone_args *args)
 {
-	u64 clone_flags = args->flags;
-	struct completion vfork;
-	struct pid *pid;
-	struct task_struct *p;
-	int trace = 0;
-	pid_t nr;
+	u64 clone_flags = args->flags;  // 存储传递给函数的标志参数
+	struct completion vfork;  // 定义用于vfork的完成变量
+	struct pid *pid;  // 存储进程标识符（PID）的指针
+	struct task_struct *p;  // 定义用于新进程的任务结构体指针
+	int trace = 0;  // 用于存储是否需要跟踪的标志
+	pid_t nr;  // 存储新创建进程的PID
 
 	/*
-	 * For legacy clone() calls, CLONE_PIDFD uses the parent_tid argument
-	 * to return the pidfd. Hence, CLONE_PIDFD and CLONE_PARENT_SETTID are
-	 * mutually exclusive. With clone3() CLONE_PIDFD has grown a separate
-	 * field in struct clone_args and it still doesn't make sense to have
-	 * them both point at the same memory location. Performing this check
-	 * here has the advantage that we don't need to have a separate helper
-	 * to check for legacy clone().
+	 * 对于传统的 clone() 调用，CLONE_PIDFD 使用 parent_tid 参数返回 pidfd。
+	 * 因此，CLONE_PIDFD 和 CLONE_PARENT_SETTID 是互斥的。对于 clone3()，
+	 * CLONE_PIDFD 在 struct clone_args 中增加了一个单独的字段，仍然不应该
+	 * 将它们指向相同内存位置。在这里进行此检查的优势是我们不需要一个额外的
+	 * 辅助函数来检查传统的 clone()。
 	 */
 	if ((args->flags & CLONE_PIDFD) &&
 	    (args->flags & CLONE_PARENT_SETTID) &&
@@ -2889,10 +2888,9 @@ pid_t kernel_clone(struct kernel_clone_args *args)
 		return -EINVAL;
 
 	/*
-	 * Determine whether and which event to report to ptracer.  When
-	 * called from kernel_thread or CLONE_UNTRACED is explicitly
-	 * requested, no event is reported; otherwise, report if the event
-	 * for the type of forking is enabled.
+	 * 确定是否以及要报告给 ptracer 的事件。
+	 * 当从 kernel_thread 调用或明确请求了 CLONE_UNTRACED 时，
+	 * 不报告事件；否则，如果启用了相应类型的事件，则报告。
 	 */
 	if (!(clone_flags & CLONE_UNTRACED)) {
 		if (clone_flags & CLONE_VFORK)
@@ -2906,51 +2904,55 @@ pid_t kernel_clone(struct kernel_clone_args *args)
 			trace = 0;
 	}
 
+  /* 复制进程并创建新的进程 */
 	p = copy_process(NULL, trace, NUMA_NO_NODE, args);
 	add_latent_entropy();
 
+  /* 如果出现错误就返回 */
 	if (IS_ERR(p))
-		return PTR_ERR(p);
+		return PTR_ERR(p);  
 
 	/*
-	 * Do this prior waking up the new thread - the thread pointer
-	 * might get invalid after that point, if the thread exits quickly.
+	 * 在唤醒新线程之前执行此操作 -
+	 * 如果线程退出得很快，线程指针可能在此时失效。
 	 */
-	trace_sched_process_fork(current, p);
+	trace_sched_process_fork(current, p);  // 跟踪新线程的调度过程
 
-	pid = get_task_pid(p, PIDTYPE_PID);
-	nr = pid_vnr(pid);
+	pid = get_task_pid(p, PIDTYPE_PID);  // 获取新进程的进程标识符（PID）
+	nr = pid_vnr(pid);  // 获取新进程的PID号
 
+  /* 将新进程的PID写入 parent_tid */
 	if (clone_flags & CLONE_PARENT_SETTID)
-		put_user(nr, args->parent_tid);
+		put_user(nr, args->parent_tid); 
 
 	if (clone_flags & CLONE_VFORK) {
-		p->vfork_done = &vfork;
-		init_completion(&vfork);
-		get_task_struct(p);
+		p->vfork_done = &vfork;  // 将新进程的 vfork_done 指针设置为 vfork 变量的地址
+		init_completion(&vfork);  // 初始化 vfork 变量
+		get_task_struct(p);  // 获取新进程的任务结构体
 	}
 
 	if (IS_ENABLED(CONFIG_LRU_GEN) && !(clone_flags & CLONE_VM)) {
-		/* lock the task to synchronize with memcg migration */
+		/* 锁定任务以与 memcg 迁移同步 */
 		task_lock(p);
-		lru_gen_add_mm(p->mm);
+		lru_gen_add_mm(p->mm);  // 向 LRU 生成器添加地址空间
 		task_unlock(p);
 	}
 
-	wake_up_new_task(p);
+	wake_up_new_task(p);  // 唤醒新创建的进程
 
-	/* forking complete and child started to run, tell ptracer */
+	/* 进程分叉完成并开始运行，告知 ptracer */
 	if (unlikely(trace))
-		ptrace_event_pid(trace, pid);
+		ptrace_event_pid(trace, pid);  // 告知 ptracer 相关事件的 PID
 
 	if (clone_flags & CLONE_VFORK) {
 		if (!wait_for_vfork_done(p, &vfork))
-			ptrace_event_pid(PTRACE_EVENT_VFORK_DONE, pid);
+			ptrace_event_pid(PTRACE_EVENT_VFORK_DONE, pid);  // 如果等待 vfork 完成，则告知 ptracer VFORK_DONE 事件
 	}
 
-	put_pid(pid);
-	return nr;
+	put_pid(pid);  // 释放 PID 对象的引用计数
+	return nr;  // 返回新创建进程的PID
 }
+
 
 /*
  * Create a kernel thread.
@@ -2987,14 +2989,17 @@ pid_t user_mode_thread(int (*fn)(void *), void *arg, unsigned long flags)
 	return kernel_clone(&args);
 }
 
+/* fork 本地直接调用clone */
 #ifdef __ARCH_WANT_SYS_FORK
 SYSCALL_DEFINE0(fork)
 {
 #ifdef CONFIG_MMU
+  /* 设置参数 */
 	struct kernel_clone_args args = {
 		.exit_signal = SIGCHLD,
 	};
 
+  /* 直接返回clone */
 	return kernel_clone(&args);
 #else
 	/* can not support in nommu mode */

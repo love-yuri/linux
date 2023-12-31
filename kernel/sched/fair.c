@@ -8109,149 +8109,147 @@ again:
 }
 #endif
 
-struct task_struct *
-pick_next_task_fair(struct rq *rq, struct task_struct *prev, struct rq_flags *rf)
-{
-	struct cfs_rq *cfs_rq = &rq->cfs;
-	struct sched_entity *se;
-	struct task_struct *p;
-	int new_tasks;
+struct task_struct *pick_next_task_fair(struct rq *rq, struct task_struct *prev, struct rq_flags *rf) {
+  struct cfs_rq *cfs_rq = &rq->cfs; // 获取cfs_rq结构体指针
+  struct sched_entity *se;          // 定义调度实体指针
+  struct task_struct *p;            // 定义task_struct指针p
+  int new_tasks;                    // 定义整型变量new_tasks
 
 again:
-	if (!sched_fair_runnable(rq))
-		goto idle;
+  if (!sched_fair_runnable(rq)) // 如果不可运行的进程队列为空
+    goto idle;                  // 跳转到idle标签
 
 #ifdef CONFIG_FAIR_GROUP_SCHED
-	if (!prev || prev->sched_class != &fair_sched_class)
-		goto simple;
+  if (!prev || prev->sched_class != &fair_sched_class) // 如果prev为空或者prev的调度类不是fair_sched_class
+    goto simple;                                       // 跳转到simple标签
 
-	/*
-	 * Because of the set_next_buddy() in dequeue_task_fair() it is rather
-	 * likely that a next task is from the same cgroup as the current.
-	 *
-	 * Therefore attempt to avoid putting and setting the entire cgroup
-	 * hierarchy, only change the part that actually changes.
-	 */
+  /*
+   * 因为在dequeue_task_fair()中的set_next_buddy()，
+   * 很可能下一个任务属于与当前任务相同的cgroup，
+   * 因此尝试避免放置和设置整个cgroup层次结构，
+   * 仅更改实际改变的部分。
+   */
 
-	do {
-		struct sched_entity *curr = cfs_rq->curr;
+  do {
+    struct sched_entity *curr = cfs_rq->curr; // 获取当前cfs_rq的当前调度实体指针
 
-		/*
-		 * Since we got here without doing put_prev_entity() we also
-		 * have to consider cfs_rq->curr. If it is still a runnable
-		 * entity, update_curr() will update its vruntime, otherwise
-		 * forget we've ever seen it.
-		 */
-		if (curr) {
-			if (curr->on_rq)
-				update_curr(cfs_rq);
-			else
-				curr = NULL;
+    /*
+     * 由于我们已经到这里而没有执行put_prev_entity()，
+     * 我们还必须考虑cfs_rq->curr。
+     * 如果它仍然是一个可运行实体，update_curr()将更新其运行时间，
+     * 否则忘记我们曾经见过它。
+     */
+    if (curr) {
+      if (curr->on_rq)
+        update_curr(cfs_rq); // 更新当前cfs_rq中的任务的运行时间
 
-			/*
-			 * This call to check_cfs_rq_runtime() will do the
-			 * throttle and dequeue its entity in the parent(s).
-			 * Therefore the nr_running test will indeed
-			 * be correct.
-			 */
-			if (unlikely(check_cfs_rq_runtime(cfs_rq))) {
-				cfs_rq = &rq->cfs;
+      else
+        curr = NULL;
 
-				if (!cfs_rq->nr_running)
-					goto idle;
+      /*
+       * 这次对check_cfs_rq_runtime()的调用将throttle并将其实体从父级中出队列。
+       * 因此，nr_running测试将确实是正确的。
+       */
+      if (unlikely(check_cfs_rq_runtime(cfs_rq))) { // 检查cfs_rq的运行时间是否超过了限制
 
-				goto simple;
-			}
-		}
+        cfs_rq = &rq->cfs; // 重置cfs_rq为rq的cfs域
 
-		se = pick_next_entity(cfs_rq, curr);
-		cfs_rq = group_cfs_rq(se);
-	} while (cfs_rq);
+        if (!cfs_rq->nr_running) // 如果cfs_rq中没有正在运行的任务
+          goto idle;             // 跳转到idle标签
 
-	p = task_of(se);
+        goto simple; // 跳转到simple标签
+      }
+    }
 
-	/*
-	 * Since we haven't yet done put_prev_entity and if the selected task
-	 * is a different task than we started out with, try and touch the
-	 * least amount of cfs_rqs.
-	 */
-	if (prev != p) {
-		struct sched_entity *pse = &prev->se;
+    se = pick_next_entity(cfs_rq, curr); // 选择cfs_rq上一个调度实体的下一个调度实体
+    cfs_rq = group_cfs_rq(se);           // 获取调度实体的组cfs_rq指针
+  } while (cfs_rq);                      // 如果cfs_rq存在，则重复上述过程
 
-		while (!(cfs_rq = is_same_group(se, pse))) {
-			int se_depth = se->depth;
-			int pse_depth = pse->depth;
+  p = task_of(se); // 获取调度实体的task_struct指针
 
-			if (se_depth <= pse_depth) {
-				put_prev_entity(cfs_rq_of(pse), pse);
-				pse = parent_entity(pse);
-			}
-			if (se_depth >= pse_depth) {
-				set_next_entity(cfs_rq_of(se), se);
-				se = parent_entity(se);
-			}
-		}
+  /*
+   * 由于我们还没有执行put_prev_entity，
+   * 如果选中的任务与我们起初的任务不同，
+   * 尝试接触最少数量的cfs_rq。
+   */
+  if (prev != p) {                        // 如果prev不等于p
+    struct sched_entity *pse = &prev->se; // 获取prev的调度实体指针
 
-		put_prev_entity(cfs_rq, pse);
-		set_next_entity(cfs_rq, se);
-	}
+    while (!(cfs_rq = is_same_group(se, pse))) {
+      int se_depth = se->depth;   // 获取se的深度
+      int pse_depth = pse->depth; // 获取pse的深度
 
-	goto done;
+      if (se_depth <= pse_depth) {
+        put_prev_entity(cfs_rq_of(pse), pse); // 将pse放回cfs_rq
+        pse = parent_entity(pse);             // 获取pse的父实体指针
+      }
+      if (se_depth >= pse_depth) {
+        set_next_entity(cfs_rq_of(se), se); // 设置se为cfs_rq的下一个实体
+        se = parent_entity(se);             // 获取se的父实体指针
+      }
+    }
+
+    put_prev_entity(cfs_rq, pse); // 将pse放回cfs_rq
+    set_next_entity(cfs_rq, se);  // 将se设置为cfs_rq的下一个实体
+  }
+
+  goto done; // 跳转到done标签
+
 simple:
 #endif
-	if (prev)
-		put_prev_task(rq, prev);
 
-	do {
-		se = pick_next_entity(cfs_rq, NULL);
-		set_next_entity(cfs_rq, se);
-		cfs_rq = group_cfs_rq(se);
-	} while (cfs_rq);
+  if (prev)
+    put_prev_task(rq, prev); // 在rq的prev位置放置一个任务（prev）
 
-	p = task_of(se);
+  do {
+    se = pick_next_entity(cfs_rq, NULL); // 选择cfs_rq上的下一个实体
+    set_next_entity(cfs_rq, se);         // 将se设置为cfs_rq的下一个实体
+    cfs_rq = group_cfs_rq(se);           // 获取调度实体的组cfs_rq指针
+  } while (cfs_rq);                      // 如果cfs_rq存在，则重复上述过程
 
-done: __maybe_unused;
+  p = task_of(se); // 获取调度实体的task_struct指针
+
+done:
+  __maybe_unused;
+
 #ifdef CONFIG_SMP
-	/*
-	 * Move the next running task to the front of
-	 * the list, so our cfs_tasks list becomes MRU
-	 * one.
-	 */
-	list_move(&p->se.group_node, &rq->cfs_tasks);
+  /*
+   * 将下一个正在运行的任务移到列表的前面，使我们的cfs_tasks列表成为MRU（most recently used）列表。
+   */
+  list_move(&p->se.group_node, &rq->cfs_tasks); // 将p的group_node节点移到rq的cfs_tasks列表的前面
 #endif
 
-	if (hrtick_enabled_fair(rq))
-		hrtick_start_fair(rq, p);
+  if (hrtick_enabled_fair(rq))
+    hrtick_start_fair(rq, p); // 如果fair调度策略启用了高精度时钟，开始fair调度的高精度时钟
 
-	update_misfit_status(p, rq);
-	sched_fair_update_stop_tick(rq, p);
+  update_misfit_status(p, rq);        // 更新p在rq中的错误状态
+  sched_fair_update_stop_tick(rq, p); // 更新rq和p的stop_calculation_tick
 
-	return p;
+  return p; // 返回选中的任务p
 
 idle:
-	if (!rf)
-		return NULL;
+  if (!rf)
+    return NULL; // 如果rf为空指针，返回NULL
 
-	new_tasks = newidle_balance(rq, rf);
+  new_tasks = newidle_balance(rq, rf); // 在rq上进行新的负载均衡，并获取新增的任务数
 
-	/*
-	 * Because newidle_balance() releases (and re-acquires) rq->lock, it is
-	 * possible for any higher priority task to appear. In that case we
-	 * must re-start the pick_next_entity() loop.
-	 */
-	if (new_tasks < 0)
-		return RETRY_TASK;
+  /*
+   * 因为newidle_balance()释放（并重新获取）rq->lock，
+   * 所以可能会出现任何具有更高优先级的任务的情况。
+   * 在这种情况下，我们必须重新开始pick_next_entity()循环。
+   */
+  if (new_tasks < 0)
+    return RETRY_TASK; // 返回RETRY_TASK标识符
 
-	if (new_tasks > 0)
-		goto again;
+  if (new_tasks > 0)
+    goto again; // 跳转到again标签
 
-	/*
-	 * rq is about to be idle, check if we need to update the
-	 * lost_idle_time of clock_pelt
-	 */
-	update_idle_rq_clock_pelt(rq);
+  /*
+   * rq即将空闲，检查是否需要更新clock_pelt的lost_idle_time。
+   */
+  update_idle_rq_clock_pelt(rq); // 更新空闲rq的clock_pelt的lost_idle_time
 
-	return NULL;
+  return NULL; // 返回NULL
 }
 
 static struct task_struct *__pick_next_task_fair(struct rq *rq)

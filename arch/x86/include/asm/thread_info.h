@@ -54,11 +54,11 @@ struct task_struct;
 #include <linux/atomic.h>
 
 struct thread_info {
-  unsigned long flags;        /* low level flags */
-  unsigned long syscall_work; /* SYSCALL_WORK_ flags */
-  u32 status;                 /* thread synchronous flags */
+  unsigned long flags;         /* 低级标志位，用于控制线程行为和状态 */
+  unsigned long syscall_work;  /* 系统调用相关标志位，指示系统调用期间的工作或状态 */
+  u32 status;                  /* 线程同步标志位，用于同步线程执行或表示线程状态 */
 #ifdef CONFIG_SMP
-  u32 cpu; /* current CPU */
+  u32 cpu;                     /* 当前线程所在的处理器编号，在SMP配置下才存在 */
 #endif
 };
 

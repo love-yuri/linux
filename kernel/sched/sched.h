@@ -952,12 +952,12 @@ struct balance_callback {
 	void (*func)(struct rq *rq);
 };
 
-/*
- * This is the main, per-CPU runqueue data structure.
+/**
+ * 这是主要的、每 CPU 运行队列数据结构。
  *
- * Locking rule: those places that want to lock multiple runqueues
- * (such as the load balancing or the thread migration code), lock
- * acquire operations must be ordered by ascending &runqueue.
+ * 锁定规则：那些想要锁定多个runqueue的地方
+ *（比如负载均衡或者线程迁移的代码），锁
+ * 获取操作必须按升序 &runqueue 排序。
  */
 struct rq {
 	/* runqueue lock: */

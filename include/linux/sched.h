@@ -120,16 +120,16 @@ struct user_event_mm;
  */
 
 /* Used in tsk->__state: 进程状态*/
-#define TASK_RUNNING 0x00000000         // 进程正在运行
-#define TASK_INTERRUPTIBLE 0x00000001   // 可中断睡眠
-#define TASK_UNINTERRUPTIBLE 0x00000002 // 不可中断睡眠
-#define __TASK_STOPPED 0x00000004       // 进程已经停止
-#define __TASK_TRACED 0x00000008        // 进程正在被监视
+#define TASK_RUNNING 0x00000000         /* 进程正在运行 */
+#define TASK_INTERRUPTIBLE 0x00000001   /* 可中断睡眠 */
+#define TASK_UNINTERRUPTIBLE 0x00000002 /* 不可中断睡眠 */
+#define __TASK_STOPPED 0x00000004       /* 进程已经停止 */
+#define __TASK_TRACED 0x00000008        /* 进程正在被监视 */
 
 /* Used in tsk->exit_state: 进程退出状态 */
-#define EXIT_DEAD 0x00000010                 // 进程已经退出 但是尚未清理
-#define EXIT_ZOMBIE 0x00000020               // 僵尸线程，父进程未获取到退出状态
-#define EXIT_TRACE (EXIT_ZOMBIE | EXIT_DEAD) // 已经退出的将是线程
+#define EXIT_DEAD 0x00000010                 /* 进程已经退出 但是尚未清理 */
+#define EXIT_ZOMBIE 0x00000020               /* 僵尸线程，父进程未获取到退出状态 */
+#define EXIT_TRACE (EXIT_ZOMBIE | EXIT_DEAD) /* 已经退出的将是线程 */
 /* Used in tsk->__state again: */
 #define TASK_PARKED 0x00000040
 #define TASK_DEAD 0x00000080
@@ -783,7 +783,7 @@ struct kmap_ctrl {
 #endif
 };
 
-// 进程控制块数据结构
+/* 进程控制块数据结构 */
 struct task_struct {
   /*   决定线程信息是否存在在task_struct中
     没有定义将线程信息存储在内核堆栈中
@@ -800,7 +800,7 @@ struct task_struct {
   struct thread_info thread_info;
 #endif
 
-  unsigned int __state; // 状态
+  unsigned int __state; // 进程状态
 
   // 是否启用实时补丁
 #ifdef CONFIG_PREEMPT_RT
@@ -814,7 +814,8 @@ struct task_struct {
    */
   randomized_struct_fields_start
 
-    void *stack;
+  /* 通过该指针指向内核栈 */
+  void *stack;
   refcount_t usage;
   /* Per task flags (PF_*), defined further below: */
   unsigned int flags;
@@ -839,10 +840,11 @@ struct task_struct {
 #endif
   int on_rq;
 
-  int prio;
-  int static_prio;
-  int normal_prio;
-  unsigned int rt_priority;
+  /* 下面四个是调度策略和优先级所使用的成员 */
+  int prio;             /* 进程当前的优先级 */
+  int static_prio;      /* 进程的静态优先级 */
+  int normal_prio;      /* 进程的正常优先级 */
+  unsigned int rt_priority;  /* 实时优先级 */
 
   struct sched_entity se;
   struct sched_rt_entity rt;
@@ -926,7 +928,10 @@ struct task_struct {
   struct rb_node pushable_dl_tasks;
 #endif
 
-  struct mm_struct *mm;
+  /* 对于普通的用户进程来说mm字段指向他的虚拟地址空间的用户空间部分，对于内核线程来说这部分为NULL */
+  struct mm_struct *mm; // 指向内存描述符
+  /* mm和active_mm都指向同一个内存描述符。 */
+  /* 当现在是内核线程时：active_mm从别的用户进程“借用”用户空间部分(内存描述符)-->惰性TLB */
   struct mm_struct *active_mm;
 
   int exit_state;
@@ -1019,6 +1024,7 @@ struct task_struct {
 
   /* pid 用于描述用户唯一进程id  数据类型-> 整形*/
   pid_t pid;
+  /* 包含父进程组 */
   pid_t tgid;
 
 #ifdef CONFIG_STACKPROTECTOR
@@ -1031,10 +1037,11 @@ struct task_struct {
    * p->real_parent->pid)
    */
 
-  /* Real parent process: */
+  /* 指向真正的父进程 */
   struct task_struct __rcu *real_parent;
 
   /* Recipient of SIGCHLD, wait4() reports: */
+  /* 如果进程被另一个进程系统调用ptrace跟踪，那么parent指向跟踪进程。否则和real_parent相同 */
   struct task_struct __rcu *parent;
 
   /*
@@ -1070,8 +1077,8 @@ struct task_struct {
   /* PF_KTHREAD | PF_IO_WORKER */
   void *worker_private;
 
-  u64 utime;
-  u64 stime;
+  u64 utime; /* 用户太执行时间 */
+  u64 stime; /* 内核态执行时间 */
 #ifdef CONFIG_ARCH_HAS_SCALED_CPUTIME
   u64 utimescaled;
   u64 stimescaled;
@@ -1141,10 +1148,10 @@ struct task_struct {
   unsigned long last_switch_count;
   unsigned long last_switch_time;
 #endif
-  /* Filesystem information: */
+  /* 文件系统信息 */
   struct fs_struct *fs;
 
-  /* Open file information: */
+  /* 打开的文件信息 */
   struct files_struct *files;
 
 #ifdef CONFIG_IO_URING
